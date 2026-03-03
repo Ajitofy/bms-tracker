@@ -1,4 +1,4 @@
-name: BMS Playwright 30hr Stable Monitor
+name: BMS Final Stable Monitor
 
 on:
   workflow_dispatch:
@@ -22,7 +22,7 @@ jobs:
           pip install playwright requests
           playwright install --with-deps
 
-      - name: Run monitoring loop
+      - name: Run monitor
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
@@ -31,7 +31,6 @@ jobs:
           import asyncio
           import requests
           import os
-          import time
           from playwright.async_api import async_playwright
 
           BOT_TOKEN = os.environ["BOT_TOKEN"]
@@ -66,19 +65,32 @@ jobs:
                       try:
                           await page.goto(URL, timeout=30000)
                           await page.wait_for_timeout(5000)
-                          body_text = await page.inner_text("body")
 
-                          if "Coming Soon" in body_text:
-                              print("Status: Coming Soon still present", flush=True)
-                              strike_count = 0
-                          else:
+                          # Detect booking buttons
+                          login_btn = page.locator("button:has-text('Login to book')")
+                          book_btn = page.locator("button:has-text('Book Now')")
+
+                          login_count = await login_btn.count()
+                          book_count = await book_btn.count()
+
+                          body_text = await page.inner_text("body")
+                          coming_present = "Coming Soon" in body_text
+
+                          print("Login button count:", login_count, flush=True)
+                          print("Book Now count:", book_count, flush=True)
+                          print("Coming Soon present:", coming_present, flush=True)
+
+                          if (login_count > 0 or book_count > 0) and not coming_present:
                               strike_count += 1
-                              print(f"Possible change detected (strike {strike_count})", flush=True)
+                              print(f"Possible OPEN detected (strike {strike_count})", flush=True)
 
                               if strike_count >= 3:
                                   print("🚨 CONFIRMED BOOKING OPEN", flush=True)
                                   send("🔥 BOOKING OPEN for Semi Final 2! Check immediately!")
                                   break
+                          else:
+                              strike_count = 0
+                              print("Status: Still NOT open", flush=True)
 
                       except Exception as e:
                           print("Error during check:", e, flush=True)
