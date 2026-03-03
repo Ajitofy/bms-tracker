@@ -2,11 +2,13 @@ name: BookMyShow Monitor
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"   # every 6 hours
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 2160   # 36 hours
+    timeout-minutes: 350   # 5h 50m safe under 6h cap
 
     steps:
       - name: Checkout repo
@@ -20,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: pip install requests beautifulsoup4
 
-      - name: Run monitor script
+      - name: Run monitor
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
@@ -36,14 +38,15 @@ jobs:
           BOT_TOKEN = os.environ["BOT_TOKEN"]
           CHAT_ID = os.environ["CHAT_ID"]
 
-          last_state = None
-          end_time = time.time() + (36 * 60 * 60)
+          end_time = time.time() + (350 * 60)  # ~5h50m
 
           def notify(msg):
               requests.get(
                   f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
                   params={"chat_id": CHAT_ID, "text": msg}
               )
+
+          last_state = None
 
           while time.time() < end_time:
               r = requests.get(URL, headers={"User-Agent": "Mozilla/5.0"})
@@ -52,7 +55,7 @@ jobs:
               button = soup.find("button")
               current = button.text.strip() if button else "NO_BUTTON"
 
-              print("Current button text:", current)
+              print("Current:", current)
 
               if last_state and current != last_state:
                   notify(f"🚨 Button changed to: {current}")
