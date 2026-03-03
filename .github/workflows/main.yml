@@ -84,7 +84,7 @@ jobs:
                               strike_count += 1
                               print(f"Possible OPEN detected (strike {strike_count})", flush=True)
 
-                              if strike_count >= 3:
+                              if strike_count >= 2:
                                   print("🚨 CONFIRMED BOOKING OPEN", flush=True)
                                   send("🔥 BOOKING OPEN for Semi Final 2! Check immediately!")
                                   break
@@ -95,7 +95,7 @@ jobs:
                       except Exception as e:
                           print("Error during check:", e, flush=True)
 
-                      await asyncio.sleep(25)
+                      await asyncio.sleep(35)
 
                   await browser.close()
 
