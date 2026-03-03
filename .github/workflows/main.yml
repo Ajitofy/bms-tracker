@@ -1,9 +1,7 @@
-name: BMS Lightweight TEST
+name: BMS Playwright TEST
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "* * * * *"
 
 jobs:
   monitor:
@@ -17,29 +15,52 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install requests
-        run: pip install requests
+      - name: Install dependencies
+        run: |
+          pip install playwright requests
+          playwright install --with-deps
 
-      - name: Test check
+      - name: Test booking detection
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
         run: |
           python <<EOF
+          import asyncio
           import requests
+          from playwright.async_api import async_playwright
 
           URL = "https://in.bookmyshow.com/sports/icc-men-s-t20-world-cup-2026-semi-final-2/ET00474271"
 
-          headers = {
-              "User-Agent": "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120 Safari/537.36"
-          }
+          def send(msg):
+              requests.post(
+                  f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                  data={"chat_id": CHAT_ID, "text": msg}
+              )
 
-          r = requests.get(URL, headers=headers, timeout=30)
-          text = r.text
+          async def check():
+              async with async_playwright() as p:
+                  browser = await p.chromium.launch(headless=True)
+                  context = await browser.new_context(
+                      locale="en-IN",
+                      user_agent="Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+                      viewport={"width": 390, "height": 844}
+                  )
 
-          print("===== PAGE CONTAINS =====")
-          print("Coming Soon" in text)
-          print("Book Now" in text)
-          print("Click to reveal" in text)
-          print("========================")
+                  page = await context.new_page()
+                  await page.goto(URL, timeout=60000)
+                  await page.wait_for_timeout(8000)
+
+                  body_text = await page.inner_text("body")
+
+                  print("===== STATUS CHECK =====")
+                  print("Coming Soon present:", "Coming Soon" in body_text)
+                  print("========================")
+
+                  # FORCE TEST ALERT (so we verify Telegram works)
+                  send("✅ TEST ALERT: Playwright working correctly")
+
+                  await browser.close()
+
+          asyncio.run(check())
           EOF
