@@ -1,4 +1,4 @@
-name: BMS Playwright TEST
+name: BMS Playwright 30hr Monitor
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 1800   # 30 hours
 
     steps:
       - name: Checkout repo
@@ -22,7 +22,7 @@ jobs:
           pip install playwright requests
           playwright install --with-deps
 
-      - name: Test booking detection
+      - name: Run monitor loop
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
@@ -31,6 +31,7 @@ jobs:
           import asyncio
           import requests
           import os
+          import time
           from playwright.async_api import async_playwright
 
           BOT_TOKEN = os.environ["BOT_TOKEN"]
@@ -44,10 +45,9 @@ jobs:
                   data={"chat_id": CHAT_ID, "text": msg}
               )
 
-          async def check():
+          async def monitor():
               async with async_playwright() as p:
                   browser = await p.chromium.launch(headless=True)
-
                   context = await browser.new_context(
                       locale="en-IN",
                       user_agent="Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120 Safari/537.36",
@@ -55,19 +55,27 @@ jobs:
                   )
 
                   page = await context.new_page()
-                  await page.goto(URL, timeout=60000)
-                  await page.wait_for_timeout(8000)
 
-                  body_text = await page.inner_text("body")
+                  check_count = 0
 
-                  print("===== STATUS CHECK =====")
-                  print("Coming Soon present:", "Coming Soon" in body_text)
-                  print("========================")
+                  while True:
+                      check_count += 1
+                      print(f"\n===== CHECK #{check_count} =====")
 
-                  # Force test message
-                  send("✅ TEST ALERT: Playwright working correctly")
+                      await page.goto(URL, timeout=60000)
+                      await page.wait_for_timeout(8000)
+
+                      body_text = await page.inner_text("body")
+
+                      if "Coming Soon" in body_text:
+                          print("Status: STILL Coming Soon")
+                          await asyncio.sleep(30)
+                      else:
+                          print("🚨 BOOKING OPEN DETECTED")
+                          send("🔥 BOOKING OPEN for Semi Final 2! Check immediately!")
+                          break
 
                   await browser.close()
 
-          asyncio.run(check())
+          asyncio.run(monitor())
           EOF
