@@ -12,13 +12,13 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Install Python
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
       - name: Install dependencies
-        run: pip install requests
+        run: pip install requests beautifulsoup4
 
       - name: Run monitor script
         env:
@@ -29,6 +29,7 @@ jobs:
           import requests
           import time
           import os
+          from bs4 import BeautifulSoup
 
           URL = "https://in.bookmyshow.com/sports/icc-men-s-t20-world-cup-2026-semi-final-2/ET00474271"
 
@@ -46,12 +47,17 @@ jobs:
 
           while time.time() < end_time:
               r = requests.get(URL, headers={"User-Agent": "Mozilla/5.0"})
-              text = r.text
+              soup = BeautifulSoup(r.text, "html.parser")
 
-              if last_state and "Coming Soon" not in text:
-                  notify("🚨 BookMyShow button changed!")
+              button = soup.find("button")
+              current = button.text.strip() if button else "NO_BUTTON"
+
+              print("Current button text:", current)
+
+              if last_state and current != last_state:
+                  notify(f"🚨 Button changed to: {current}")
                   break
 
-              last_state = text
+              last_state = current
               time.sleep(30)
           EOF
