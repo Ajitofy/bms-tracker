@@ -1,66 +1,51 @@
-name: BookMyShow Monitor
+name: BMS Monitor TEST (Playwright)
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 */6 * * *"   # every 6 hours
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 350   # 5h 50m safe under 6h cap
+    timeout-minutes: 10
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
       - name: Install dependencies
-        run: pip install requests beautifulsoup4
+        run: |
+          pip install playwright requests
+          playwright install --with-deps
 
-      - name: Run monitor
+      - name: Run short test
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
         run: |
           python <<EOF
+          import asyncio
           import requests
-          import time
           import os
-          from bs4 import BeautifulSoup
+          from playwright.async_api import async_playwright
 
           URL = "https://in.bookmyshow.com/sports/icc-men-s-t20-world-cup-2026-semi-final-2/ET00474271"
 
-          BOT_TOKEN = os.environ["BOT_TOKEN"]
-          CHAT_ID = os.environ["CHAT_ID"]
+          async def test():
+              async with async_playwright() as p:
+                  browser = await p.chromium.launch(headless=True)
+                  page = await browser.new_page()
+                  await page.goto(URL)
+                  await page.wait_for_timeout(5000)
 
-          end_time = time.time() + (350 * 60)  # ~5h50m
+                  buttons = await page.locator("button").all_text_contents()
+                  print("All buttons found:")
+                  for b in buttons:
+                      print("->", b.strip())
 
-          def notify(msg):
-              requests.get(
-                  f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-                  params={"chat_id": CHAT_ID, "text": msg}
-              )
+                  await browser.close()
 
-          last_state = None
-
-          while time.time() < end_time:
-              r = requests.get(URL, headers={"User-Agent": "Mozilla/5.0"})
-              soup = BeautifulSoup(r.text, "html.parser")
-
-              button = soup.find("button")
-              current = button.text.strip() if button else "NO_BUTTON"
-
-              print("Current:", current)
-
-              if last_state and current != last_state:
-                  notify(f"🚨 Button changed to: {current}")
-                  break
-
-              last_state = current
-              time.sleep(30)
+          asyncio.run(test())
           EOF
