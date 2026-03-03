@@ -1,4 +1,4 @@
-name: BMS Playwright 30hr Monitor
+name: BMS Playwright 30hr Stable Monitor
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 1800   # 30 hours
+    timeout-minutes: 1800   # 30 hours max
 
     steps:
       - name: Checkout repo
@@ -22,7 +22,7 @@ jobs:
           pip install playwright requests
           playwright install --with-deps
 
-      - name: Run monitor loop
+      - name: Run monitoring loop
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
@@ -56,24 +56,34 @@ jobs:
 
                   page = await context.new_page()
 
+                  strike_count = 0
                   check_count = 0
 
                   while True:
                       check_count += 1
-                      print(f"\n===== CHECK #{check_count} =====")
+                      print(f"\n===== CHECK #{check_count} =====", flush=True)
 
-                      await page.goto(URL, timeout=60000)
-                      await page.wait_for_timeout(8000)
+                      try:
+                          await page.goto(URL, timeout=30000)
+                          await page.wait_for_timeout(5000)
+                          body_text = await page.inner_text("body")
 
-                      body_text = await page.inner_text("body")
+                          if "Coming Soon" in body_text:
+                              print("Status: Coming Soon still present", flush=True)
+                              strike_count = 0
+                          else:
+                              strike_count += 1
+                              print(f"Possible change detected (strike {strike_count})", flush=True)
 
-                      if "Coming Soon" in body_text:
-                          print("Status: STILL Coming Soon")
-                          await asyncio.sleep(30)
-                      else:
-                          print("🚨 BOOKING OPEN DETECTED")
-                          send("🔥 BOOKING OPEN for Semi Final 2! Check immediately!")
-                          break
+                              if strike_count >= 3:
+                                  print("🚨 CONFIRMED BOOKING OPEN", flush=True)
+                                  send("🔥 BOOKING OPEN for Semi Final 2! Check immediately!")
+                                  break
+
+                      except Exception as e:
+                          print("Error during check:", e, flush=True)
+
+                      await asyncio.sleep(25)
 
                   await browser.close()
 
